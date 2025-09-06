@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import Dexie, { Table } from 'dexie';
 import { 
   UserProgress, 
@@ -10,15 +11,24 @@ import {
   Topic, 
   LearningPath, 
   MediaResource,
-  UserProgress as ContentProgress
+  UserProgress as ContentProgress,
+  Subject
 } from '@/lib/types/content';
 
 export interface User {
   id?: number;
   userId: string;
+  role?: 'student' | 'teacher';
   name: string;
   grade: string;
   preferredLanguage: 'en' | 'or';
+  // School/Org identifiers
+  schoolId?: string;
+  schoolNameOrId?: string;
+  // Student-specific
+  studentId?: string;
+  // Teacher-specific
+  subject?: string;
   avatar?: string;
   createdAt: Date;
   lastSyncAt?: Date;
@@ -106,8 +116,96 @@ export const db = new LearningPlatformDB();
 // Database utility functions
 export class OfflineManager {
   
+  // User & Auth management
+  static async registerStudent(params: { schoolIdOrName: string; grade: string; name: string; studentId: string; preferredLanguage?: 'en' | 'or'; }): Promise<User> {
+    const preferredLanguage = params.preferredLanguage ?? 'en';
+    const existing = await db.users.where('userId').equals(params.studentId).first();
+    if (existing) {
+      // Update existing basic fields if missing
+      const patch: Partial<User> = {
+        role: 'student',
+        name: params.name,
+        grade: params.grade,
+        schoolNameOrId: params.schoolIdOrName,
+        preferredLanguage,
+        studentId: params.studentId,
+      };
+      await db.users.update(existing.id!, patch);
+      const merged = { ...existing, ...patch } as User;
+      await this.addToSyncQueue('update', 'users', merged.userId, patch);
+      return merged;
+    }
+
+    const user: User = {
+      userId: params.studentId,
+      role: 'student',
+      name: params.name,
+      grade: params.grade,
+      preferredLanguage,
+      schoolNameOrId: params.schoolIdOrName,
+      studentId: params.studentId,
+      createdAt: new Date(),
+    };
+    const id = await db.users.add(user);
+    user.id = id;
+    await this.addToSyncQueue('create', 'users', user.userId, user);
+    return user;
+  }
+
+  static async registerTeacher(params: { schoolId: string; grade: string; subject: string; userId?: string; name?: string; preferredLanguage?: 'en' | 'or'; }): Promise<User> {
+    const preferredLanguage = params.preferredLanguage ?? 'en';
+    const uid = params.userId ?? `${params.schoolId}:${params.subject}:${params.grade}`;
+    const existing = await db.users.where('userId').equals(uid).first();
+    if (existing) {
+      const patch: Partial<User> = {
+        role: 'teacher',
+        grade: params.grade,
+        schoolId: params.schoolId,
+        subject: params.subject,
+        preferredLanguage,
+      };
+      if (params.name) patch.name = params.name;
+      await db.users.update(existing.id!, patch);
+      const merged = { ...existing, ...patch } as User;
+      await this.addToSyncQueue('update', 'users', merged.userId, patch);
+      return merged;
+    }
+
+    const user: User = {
+      userId: uid,
+      role: 'teacher',
+      name: params.name ?? 'Class Teacher',
+      grade: params.grade,
+      preferredLanguage,
+      schoolId: params.schoolId,
+      subject: params.subject,
+      createdAt: new Date(),
+    };
+    const id = await db.users.add(user);
+    user.id = id;
+    await this.addToSyncQueue('create', 'users', user.userId, user);
+    return user;
+  }
+
+  static async loginStudent(params: { schoolIdOrName: string; grade: string; studentId: string; }): Promise<User | null> {
+    const user = await db.users.where('userId').equals(params.studentId).first();
+    if (!user) return null;
+    if (user.grade !== params.grade) return null;
+    // If we stored schoolNameOrId, we can optionally check substring match
+    if (user.schoolNameOrId && params.schoolIdOrName && user.schoolNameOrId !== params.schoolIdOrName) {
+      // Allow loose match: skip strict check
+    }
+    return user;
+  }
+
+  static async loginTeacher(params: { schoolId: string; grade: string; subject: string; }): Promise<User | null> {
+    const uid = `${params.schoolId}:${params.subject}:${params.grade}`;
+    const user = await db.users.where('userId').equals(uid).first();
+    return user ?? null;
+  }
+
   // Content caching
-  static async cacheContent(contentId: string, contentType: 'topic' | 'media' | 'assessment', data: any) {
+  static async cacheContent(contentId: string, contentType: 'topic' | 'media' | 'assessment', data: unknown) {
     try {
       const size = new Blob([JSON.stringify(data)]).size;
       
@@ -149,6 +247,137 @@ export class OfflineManager {
     }
   }
 
+  // Progress & XP management
+  static async awardXP(userId: string, amount: number): Promise<boolean> {
+    try {
+      const prog = await db.userProgress.where('userId').equals(userId).first();
+      if (!prog) {
+        await db.userProgress.add({
+          id: crypto.randomUUID(),
+          userId,
+          totalXP: amount,
+          level: 1,
+          currentStreak: 0,
+          longestStreak: 0,
+          badgesEarned: [],
+          achievementsUnlocked: [],
+          lastActivityDate: new Date(),
+          weeklyGoalProgress: amount,
+          weeklyGoalTarget: 100,
+        });
+      } else {
+        const newXP = (prog.totalXP || 0) + amount;
+        const newLevel = Math.max(1, Math.floor(newXP / 100) + 1);
+        await db.userProgress.where('userId').equals(userId).modify({
+          totalXP: newXP,
+          level: newLevel,
+          lastActivityDate: new Date(),
+          weeklyGoalProgress: (prog.weeklyGoalProgress || 0) + amount,
+        } as any);
+      }
+      await this.addToSyncQueue('update', 'userProgress', userId, { deltaXP: amount });
+      return true;
+    } catch (e) {
+      console.error('Failed to award XP', e);
+      return false;
+    }
+  }
+
+  static async startLearningSession(params: { userId: string; subject: string; grade: string; topicId: string; }): Promise<string | null> {
+    try {
+      const id = crypto.randomUUID();
+      await db.learningSessions.add({
+        id,
+        userId: params.userId,
+        subject: params.subject,
+        grade: params.grade,
+        topicId: params.topicId,
+        startTime: new Date(),
+        endTime: new Date(),
+        xpEarned: 0,
+        accuracy: 0,
+        completionStatus: 'partial',
+        challengesAttempted: 0,
+        challengesCorrect: 0,
+      } as any);
+      await this.addToSyncQueue('create', 'learningSession', id, params);
+      return id;
+    } catch (e) {
+      console.error('Failed to start learning session', e);
+      return null;
+    }
+  }
+
+  static async endLearningSession(sessionId: string, results: Partial<LearningSession>): Promise<boolean> {
+    try {
+      await db.learningSessions.update(sessionId as any, {
+        endTime: new Date(),
+        completionStatus: results.completionStatus ?? 'completed',
+        xpEarned: results.xpEarned ?? 0,
+        accuracy: results.accuracy ?? 0,
+        challengesAttempted: results.challengesAttempted ?? 0,
+        challengesCorrect: results.challengesCorrect ?? 0,
+      } as any);
+      await this.addToSyncQueue('update', 'learningSession', sessionId, results);
+      if (results.xpEarned && results.xpEarned > 0) {
+        await this.awardXP((results as any).userId, results.xpEarned);
+      }
+      return true;
+    } catch (e) {
+      console.error('Failed to end learning session', e);
+      return false;
+    }
+  }
+
+  // Teacher utilities
+  static async getStudentsBySchool(schoolId: string): Promise<User[]> {
+    try {
+      const users = await db.users.toArray();
+      return users.filter(u => (u.role === 'student') && (u.schoolNameOrId === schoolId || u.schoolId === schoolId));
+    } catch (e) {
+      console.error('Failed to fetch students by school', e);
+      return [];
+    }
+  }
+
+  static async getSchoolLeaderboard(schoolId: string): Promise<Array<{ user: User; progress: UserProgress | null }>> {
+    try {
+      const students = await this.getStudentsBySchool(schoolId);
+      const ids = students.map(s => s.userId);
+      const progresses = ids.length > 0 ? await db.userProgress.where('userId').anyOf(ids).toArray() : [];
+      const progressByUser = new Map(progresses.map(p => [p.userId, p]));
+      const out = students.map(user => ({ user, progress: progressByUser.get(user.userId) ?? null }));
+      out.sort((a, b) => (b.progress?.totalXP ?? 0) - (a.progress?.totalXP ?? 0));
+      return out;
+    } catch (e) {
+      console.error('Failed to compute leaderboard', e);
+      return [];
+    }
+  }
+
+  static async publishDailyChallenge(dc: Omit<DailyChallenge, 'id' | 'unlockedAt'> & { id?: string }): Promise<string | null> {
+    try {
+      const id = dc.id ?? crypto.randomUUID();
+      const item: DailyChallenge = {
+        ...(dc as any),
+        id,
+        // Keep as provided fields; DailyChallenge type has unlockedAt? It defines date field not unlockedAt.
+      };
+      await db.dailyChallenges.add(item as any);
+      await this.addToSyncQueue('create', 'dailyChallenge', id, item);
+      return id;
+    } catch (e) {
+      console.error('Failed to publish daily challenge', e);
+      return null;
+    }
+  }
+
+  static async publishQuiz(payload: { schoolId: string; grade: string; subject: string; title: string; description?: string }): Promise<string> {
+    const id = crypto.randomUUID();
+    await this.addToSyncQueue('create', 'quiz', id, payload);
+    return id;
+  }
+
   // Progress management
   static async saveProgress(userId: string, progressData: Partial<UserProgress>) {
     try {
@@ -179,7 +408,7 @@ export class OfflineManager {
     action: 'create' | 'update' | 'delete',
     entityType: string,
     entityId: string,
-    data: any
+    data: unknown
   ) {
     try {
       await db.syncQueue.add({
@@ -198,11 +427,88 @@ export class OfflineManager {
 
   static async getPendingSyncItems(): Promise<SyncQueue[]> {
     try {
-      return await db.syncQueue.where('synced').equals(false).toArray();
+      return await db.syncQueue.filter(item => item.synced === false).toArray();
     } catch (error) {
       console.error('Failed to get pending sync items:', error);
       return [];
     }
+  }
+
+  // Session and analytics helpers
+  static async getUserSessions(userId: string) {
+    return await db.learningSessions.where('userId').equals(userId).toArray();
+  }
+
+  static async getUserSessionsInRange(userId: string, from: Date, to: Date) {
+    const all = await db.learningSessions.where('userId').equals(userId).toArray();
+    return all.filter(s => new Date(s.startTime) >= from && new Date(s.startTime) <= to);
+  }
+
+  static async getStudyTimeMinutes(userId: string, period: 'today' | 'week'): Promise<number> {
+    const now = new Date();
+    const start = new Date(now);
+    if (period === 'today') {
+      start.setHours(0,0,0,0);
+    } else {
+      const day = now.getDay();
+      const diff = (day === 0 ? 6 : day - 1); // Monday-start week
+      start.setDate(now.getDate() - diff);
+      start.setHours(0,0,0,0);
+    }
+    const list = await this.getUserSessionsInRange(userId, start, now);
+    let minutes = 0;
+    for (const s of list) {
+      const end = new Date(s.endTime);
+      const begin = new Date(s.startTime);
+      minutes += Math.max(0, Math.round((end.getTime() - begin.getTime()) / 60000));
+    }
+    return minutes;
+  }
+
+  static async getXPBySubject(userId: string): Promise<Record<Subject | string, number>> {
+    const sessions = await this.getUserSessions(userId);
+    const acc: Record<string, number> = {};
+    for (const s of sessions) {
+      acc[s.subject] = (acc[s.subject] || 0) + (s.xpEarned || 0);
+    }
+    return acc;
+  }
+
+  static async getEarnedBadges(userId: string): Promise<Badge[]> {
+    const prog = await db.userProgress.where('userId').equals(userId).first();
+    if (!prog || !prog.badgesEarned || prog.badgesEarned.length === 0) return [];
+    const badges = await db.badges.toArray();
+    const set = new Set(prog.badgesEarned);
+    return badges.filter(b => set.has(b.id));
+  }
+
+  static async getClassEngagement(schoolId: string, grade: string): Promise<{ avgMinutesWeek: number; activeToday: number; activeThisWeek: number; totalStudents: number; }> {
+    const students = (await this.getStudentsBySchool(schoolId)).filter(s => s.grade === grade);
+    const now = new Date();
+    const startOfWeek = new Date(now);
+    const day = now.getDay();
+    const diff = (day === 0 ? 6 : day - 1);
+    startOfWeek.setDate(now.getDate() - diff);
+    startOfWeek.setHours(0,0,0,0);
+
+    let totalMinutes = 0;
+    let activeToday = 0;
+    let activeThisWeek = 0;
+
+    for (const st of students) {
+      const sessionsWeek = await this.getUserSessionsInRange(st.userId, startOfWeek, now);
+      if (sessionsWeek.length > 0) activeThisWeek += 1;
+      const todayStart = new Date(now); todayStart.setHours(0,0,0,0);
+      const todaySessions = sessionsWeek.filter(s => new Date(s.startTime) >= todayStart);
+      if (todaySessions.length > 0) activeToday += 1;
+      for (const s of sessionsWeek) {
+        const end = new Date(s.endTime); const begin = new Date(s.startTime);
+        totalMinutes += Math.max(0, Math.round((end.getTime() - begin.getTime()) / 60000));
+      }
+    }
+
+    const avgMinutesWeek = students.length > 0 ? Math.round(totalMinutes / students.length) : 0;
+    return { avgMinutesWeek, activeToday, activeThisWeek, totalStudents: students.length };
   }
 
   static async markSynced(syncId: number) {

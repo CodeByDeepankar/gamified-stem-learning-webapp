@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Offline • STEM Learn</title>
+  <style>
+    :root { --bg: #0f172a; --fg:#e2e8f0; --muted:#94a3b8; --accent:#22c55e; }
+    html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);font:16px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif}
+    .wrap{max-width:720px;margin:40px auto;padding:24px}
+    .card{background:#111827;border:1px solid #1f2937;border-radius:16px;padding:24px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+    h1{margin:0 0 8px;font-size:24px}
+    p{margin:0 0 12px;color:var(--muted)}
+    .row{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px}
+    .btn{background:#0ea5e9;border:0;color:white;padding:10px 14px;border-radius:10px;text-decoration:none;display:inline-block}
+    .hint{font-size:12px;color:#a3a3a3;margin-top:16px}
+    .badge{display:inline-block;background:#064e3b;color:#bbf7d0;border:1px solid #065f46;border-radius:9999px;padding:2px 8px;font-size:12px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <span class="badge">Offline</span>
+      <h1>You're offline</h1>
+      <p>Don't worry — your progress will sync when you're back online.</p>
+      <div class="row">
+        <a class="btn" href="/">Return to Home</a>
+        <a class="btn" href="/games?offline=1">Play Offline Game</a>
+      </div>
+      <p class="hint">Tip: Install the app and keep learning without internet.</p>
+    </div>
+  </div>
+</body>
+</html>
+

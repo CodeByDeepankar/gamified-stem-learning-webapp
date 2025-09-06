@@ -54,7 +54,7 @@ export interface MediaResource {
 export interface InteractiveElement {
   id: string;
   type: 'quiz' | 'drag_drop' | 'matching' | 'simulation' | 'calculator' | 'drawing';
-  config: Record<string, any>; // Flexible configuration
+  config: Record<string, unknown>; // Flexible configuration
   points: number;
   feedback: Feedback;
 }

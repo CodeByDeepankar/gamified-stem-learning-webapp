@@ -72,7 +72,7 @@ export function useOffline() {
   const cacheContent = useCallback(async (
     contentId: string, 
     contentType: 'topic' | 'media' | 'assessment', 
-    data: any
+    data: unknown
   ): Promise<boolean> => {
     const success = await OfflineManager.cacheContent(contentId, contentType, data);
     if (success) {

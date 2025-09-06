@@ -1,103 +1,210 @@
-import Image from "next/image";
+import Link from "next/link";
+import HomeGate from "@/components/home/HomeGate";
 
 export default function Home() {
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50">
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center space-x-2">
+              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-green-500 rounded-lg flex items-center justify-center">
+                <span className="text-white font-bold text-lg">S</span>
+              </div>
+              <h1 className="text-xl font-bold text-gray-900">STEM Learn</h1>
+            </div>
+            <nav className="flex space-x-6">
+              <Link href="/subjects" className="text-gray-600 hover:text-blue-600 transition-colors">
+                Subjects
+              </Link>
+              <Link href="/profile" className="text-gray-600 hover:text-blue-600 transition-colors">
+                Profile
+              </Link>
+              <Link href="/achievements" className="text-gray-600 hover:text-blue-600 transition-colors">
+                Achievements
+              </Link>
+            </nav>
+          </div>
+        </div>
+      </header>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+      {/* Hero Section */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="text-center mb-16">
+          <h2 className="text-4xl md:text-6xl font-bold text-gray-900 mb-6">
+            Interactive <span className="text-blue-600">STEM</span> Learning
+          </h2>
+          <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto">
+            Explore Science, Technology, Engineering, and Mathematics through engaging, 
+            gamified lessons designed for students in grades 6-12.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Link 
+              href="/subjects"
+              className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-lg font-semibold text-lg transition-colors shadow-lg"
+            >
+              Start Learning
+            </Link>
+            <Link 
+              href="/demo"
+              className="border border-blue-600 text-blue-600 hover:bg-blue-50 px-8 py-4 rounded-lg font-semibold text-lg transition-colors"
+            >
+              Take Demo
+            </Link>
+          </div>
+        </div>
+
+        <HomeGate />
+
+        {/* Subject Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
+          <SubjectCard 
+            title="Science" 
+            titleOdia="ବିଜ୍ଞାନ"
+            description="Explore the natural world through experiments and discovery"
+            icon="🔬"
+            color="from-purple-500 to-pink-500"
+            href="/subjects/science"
+          />
+          <SubjectCard 
+            title="Technology" 
+            titleOdia="ପ୍ରଯୁକ୍ତି"
+            description="Learn about computers, coding, and digital innovation"
+            icon="💻"
+            color="from-blue-500 to-cyan-500"
+            href="/subjects/technology"
+          />
+          <SubjectCard 
+            title="Engineering" 
+            titleOdia="ଇଞ୍ଜିନିୟରିଂ"
+            description="Design, build, and solve real-world problems"
+            icon="⚙️"
+            color="from-orange-500 to-red-500"
+            href="/subjects/engineering"
+          />
+          <SubjectCard 
+            title="Mathematics" 
+            titleOdia="ଗଣିତ"
+            description="Master numbers, patterns, and logical thinking"
+            icon="📐"
+            color="from-green-500 to-teal-500"
+            href="/subjects/mathematics"
+          />
+        </div>
+
+        {/* Features Section */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
+          <FeatureCard 
+            icon="🎮"
+            title="Gamified Learning"
+            description="Earn XP, unlock badges, and compete with friends while learning"
+          />
+          <FeatureCard 
+            icon="📱"
+            title="Offline Ready"
+            description="Learn anywhere, anytime with our progressive web app technology"
+          />
+          <FeatureCard 
+            icon="🌐"
+            title="Bilingual Support"
+            description="Content available in English and Odia for better understanding"
+          />
+        </div>
+
+        {/* Stats Section */}
+        <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+            <StatCard number="7" label="Grade Levels" sublabel="Grades 6-12" />
+            <StatCard number="4" label="STEM Subjects" sublabel="Complete Coverage" />
+            <StatCard number="∞" label="Practice Problems" sublabel="Adaptive Learning" />
+            <StatCard number="🏆" label="Achievements" sublabel="Unlock & Earn" />
+          </div>
         </div>
       </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
+
+      {/* Footer */}
+      <footer className="bg-gray-900 text-white py-12 mt-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <div className="flex items-center justify-center space-x-2 mb-4">
+            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-green-500 rounded-lg flex items-center justify-center">
+              <span className="text-white font-bold text-lg">S</span>
+            </div>
+            <span className="text-xl font-bold">STEM Learn</span>
+          </div>
+          <p className="text-gray-400 mb-4">
+            Empowering rural students with interactive STEM education
+          </p>
+          <div className="flex justify-center space-x-6 text-sm text-gray-400">
+            <span>© 2024 STEM Learning Platform</span>
+            <span>•</span>
+            <span>Built with Next.js</span>
+            <span>•</span>
+            <span>PWA Ready</span>
+          </div>
+        </div>
       </footer>
+    </div>
+  );
+}
+
+// Subject Card Component
+interface SubjectCardProps {
+  title: string;
+  titleOdia: string;
+  description: string;
+  icon: string;
+  color: string;
+  href: string;
+}
+
+function SubjectCard({ title, titleOdia, description, icon, color, href }: SubjectCardProps) {
+  return (
+    <Link href={href} className="group">
+      <div className="bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden group-hover:scale-105">
+        <div className={`bg-gradient-to-r ${color} p-6 text-center`}>
+          <div className="text-4xl mb-2">{icon}</div>
+          <h3 className="text-xl font-bold text-white">{title}</h3>
+          <p className="text-white/80 text-sm font-medium">{titleOdia}</p>
+        </div>
+        <div className="p-6">
+          <p className="text-gray-600 text-sm leading-relaxed">{description}</p>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+// Feature Card Component
+interface FeatureCardProps {
+  icon: string;
+  title: string;
+  description: string;
+}
+
+function FeatureCard({ icon, title, description }: FeatureCardProps) {
+  return (
+    <div className="text-center">
+      <div className="text-4xl mb-4">{icon}</div>
+      <h3 className="text-xl font-semibold text-gray-900 mb-2">{title}</h3>
+      <p className="text-gray-600">{description}</p>
+    </div>
+  );
+}
+
+// Stat Card Component
+interface StatCardProps {
+  number: string;
+  label: string;
+  sublabel: string;
+}
+
+function StatCard({ number, label, sublabel }: StatCardProps) {
+  return (
+    <div>
+      <div className="text-3xl font-bold text-blue-600 mb-2">{number}</div>
+      <div className="text-lg font-semibold text-gray-900">{label}</div>
+      <div className="text-sm text-gray-500">{sublabel}</div>
     </div>
   );
 }
