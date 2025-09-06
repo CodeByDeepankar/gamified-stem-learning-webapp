@@ -1,0 +1,56 @@
+{
+  "app": {
+    "title": "STEM Learning Platform",
+    "welcome": "Welcome to your learning adventure!",
+    "tagline": "Master Science, Technology, Engineering & Math through engaging challenges"
+  },
+  "navigation": {
+    "home": "Home",
+    "subjects": "Subjects",
+    "challenges": "Challenges",
+    "progress": "Progress",
+    "profile": "Profile",
+    "leaderboard": "Leaderboard"
+  },
+  "subjects": {
+    "science": "Science",
+    "technology": "Technology", 
+    "engineering": "Engineering",
+    "mathematics": "Mathematics"
+  },
+  "grades": {
+    "grade6": "Grade 6",
+    "grade7": "Grade 7",
+    "grade8": "Grade 8",
+    "grade9": "Grade 9",
+    "grade10": "Grade 10",
+    "grade11": "Grade 11",
+    "grade12": "Grade 12"
+  },
+  "gamification": {
+    "points": "Points",
+    "badges": "Badges",
+    "streak": "Day Streak",
+    "level": "Level",
+    "xp": "Experience Points",
+    "achievement": "Achievement Unlocked!",
+    "dailyChallenge": "Daily Challenge",
+    "weeklyGoal": "Weekly Goal"
+  },
+  "actions": {
+    "start": "Start",
+    "continue": "Continue",
+    "complete": "Complete",
+    "retry": "Try Again",
+    "next": "Next",
+    "previous": "Previous",
+    "submit": "Submit",
+    "save": "Save",
+    "cancel": "Cancel"
+  },
+  "offline": {
+    "title": "You're offline",
+    "message": "Don't worry! You can continue learning with downloaded content.",
+    "syncMessage": "Content will sync when you're back online."
+  }
+}
