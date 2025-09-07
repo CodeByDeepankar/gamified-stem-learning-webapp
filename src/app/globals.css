@@ -1,1 +1,42 @@
 @import "tailwindcss";
+
+/* Smooth theme transition */
+.theme-transition *, .theme-transition {
+	transition: background-color 0.35s ease, color 0.35s ease, border-color 0.35s ease, fill 0.35s ease, stroke 0.35s ease, box-shadow 0.35s ease;
+}
+
+/* Optional subtle fade overlay */
+.theme-transition::after {
+	content: "";
+	position: fixed;
+	inset: 0;
+	pointer-events: none;
+	background: radial-gradient(circle at center, rgba(255,255,255,0.15), transparent 70%);
+	mix-blend-mode: overlay;
+	animation: themeFlash 0.35s ease forwards;
+}
+
+@keyframes themeFlash {
+	0% { opacity: 0.6; }
+	100% { opacity: 0; }
+}
+
+/* Unified background design tokens */
+:root {
+	--app-bg: #ffffff;
+	--app-bg-alt: #f5f7fa;
+	--app-gradient: radial-gradient(circle at 20% 18%, rgba(0,0,0,0.04), transparent 55%);
+	--app-card-bg: #ffffff;
+	--app-border: #e5e7eb;
+}
+.dark {
+	--app-bg: #0d1117;
+	--app-bg-alt: #111b1f;
+	--app-gradient: radial-gradient(circle at 22% 20%, rgba(255,255,255,0.06), transparent 60%);
+	--app-card-bg: #111b23;
+	--app-border: #1f2937;
+}
+
+body { background: var(--app-bg); }
+.soft-app-gradient { background: var(--app-gradient), var(--app-bg); }
+.card-surface { background: var(--app-card-bg); border-color: var(--app-border); }

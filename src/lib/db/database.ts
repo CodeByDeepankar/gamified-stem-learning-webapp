@@ -99,11 +99,13 @@ export class LearningPlatformDB extends Dexie {
     });
 
     // Add hooks for automatic timestamping
-    this.offlineContent.hook('creating', (primKey, obj, trans) => {
+    this.offlineContent.hook('creating', (_primKey, obj) => {
+      void _primKey;
       obj.lastAccessedAt = new Date();
     });
 
-    this.syncQueue.hook('creating', (primKey, obj, trans) => {
+    this.syncQueue.hook('creating', (_primKey, obj) => {
+      void _primKey;
       obj.timestamp = new Date();
       obj.retries = 0;
       obj.synced = false;
@@ -111,13 +113,30 @@ export class LearningPlatformDB extends Dexie {
   }
 }
 
-export const db = new LearningPlatformDB();
+// Only initialize IndexedDB in the browser.
+const isBrowser = typeof window !== 'undefined';
+export const db: LearningPlatformDB | null = isBrowser ? new LearningPlatformDB() : null;
 
 // Database utility functions
 export class OfflineManager {
   
   // User & Auth management
   static async registerStudent(params: { schoolIdOrName: string; grade: string; name: string; studentId: string; preferredLanguage?: 'en' | 'or'; }): Promise<User> {
+    if (!isBrowser || !db) {
+      // Server fallback: return a minimal user object (no DB persistence)
+      const preferredLanguage = params.preferredLanguage ?? 'en';
+      return {
+        userId: params.studentId,
+        role: 'student',
+        name: params.name,
+        grade: params.grade,
+        preferredLanguage,
+        schoolNameOrId: params.schoolIdOrName,
+        studentId: params.studentId,
+        createdAt: new Date(),
+      } as User;
+    }
+
     const preferredLanguage = params.preferredLanguage ?? 'en';
     const existing = await db.users.where('userId').equals(params.studentId).first();
     if (existing) {
@@ -152,9 +171,22 @@ export class OfflineManager {
     return user;
   }
 
-  static async registerTeacher(params: { schoolId: string; grade: string; subject: string; userId?: string; name?: string; preferredLanguage?: 'en' | 'or'; }): Promise<User> {
+  static async registerTeacher(params: { schoolId: string; grade: string; subject?: string; userId?: string; name?: string; preferredLanguage?: 'en' | 'or'; }): Promise<User> {
+    if (!isBrowser || !db) {
+      return {
+        userId: params.userId ?? `${params.schoolId}:${params.grade}`,
+        role: 'teacher',
+        name: params.name ?? 'Class Teacher',
+        grade: params.grade,
+        preferredLanguage: params.preferredLanguage ?? 'en',
+        schoolId: params.schoolId,
+        subject: params.subject,
+        createdAt: new Date(),
+      } as User;
+    }
+
     const preferredLanguage = params.preferredLanguage ?? 'en';
-    const uid = params.userId ?? `${params.schoolId}:${params.subject}:${params.grade}`;
+    const uid = params.userId ?? `${params.schoolId}:${params.grade}`;
     const existing = await db.users.where('userId').equals(uid).first();
     if (existing) {
       const patch: Partial<User> = {
@@ -188,9 +220,10 @@ export class OfflineManager {
   }
 
   static async loginStudent(params: { schoolIdOrName: string; grade: string; studentId: string; }): Promise<User | null> {
-    const user = await db.users.where('userId').equals(params.studentId).first();
-    if (!user) return null;
-    if (user.grade !== params.grade) return null;
+  if (!isBrowser || !db) return null;
+  const user = await db.users.where('userId').equals(params.studentId).first();
+  if (!user) return null;
+  if (user.grade !== params.grade) return null;
     // If we stored schoolNameOrId, we can optionally check substring match
     if (user.schoolNameOrId && params.schoolIdOrName && user.schoolNameOrId !== params.schoolIdOrName) {
       // Allow loose match: skip strict check
@@ -198,17 +231,18 @@ export class OfflineManager {
     return user;
   }
 
-  static async loginTeacher(params: { schoolId: string; grade: string; subject: string; }): Promise<User | null> {
-    const uid = `${params.schoolId}:${params.subject}:${params.grade}`;
-    const user = await db.users.where('userId').equals(uid).first();
-    return user ?? null;
+  static async loginTeacher(params: { schoolId: string; grade: string; }): Promise<User | null> {
+  if (!isBrowser || !db) return null;
+  const uid = `${params.schoolId}:${params.grade}`;
+  const user = await db.users.where('userId').equals(uid).first();
+  return user ?? null;
   }
 
   // Content caching
   static async cacheContent(contentId: string, contentType: 'topic' | 'media' | 'assessment', data: unknown) {
+    if (!isBrowser || !db) return false;
     try {
       const size = new Blob([JSON.stringify(data)]).size;
-      
       await db.offlineContent.put({
         contentId,
         contentType,
@@ -216,9 +250,8 @@ export class OfflineManager {
         downloadedAt: new Date(),
         lastAccessedAt: new Date(),
         size,
-        isStale: false
+        isStale: false,
       });
-      
       return true;
     } catch (error) {
       console.error('Failed to cache content:', error);
@@ -227,19 +260,17 @@ export class OfflineManager {
   }
 
   static async getCachedContent(contentId: string, contentType: 'topic' | 'media' | 'assessment') {
+    if (!isBrowser || !db) return null;
     try {
       const content = await db.offlineContent
         .where('contentId')
         .equals(contentId)
-        .and(item => item.contentType === contentType)
+        .and((item) => item.contentType === contentType)
         .first();
-
       if (content) {
-        // Update last accessed time
         await db.offlineContent.update(content.id!, { lastAccessedAt: new Date() });
         return content.data;
       }
-      
       return null;
     } catch (error) {
       console.error('Failed to get cached content:', error);
@@ -249,6 +280,7 @@ export class OfflineManager {
 
   // Progress & XP management
   static async awardXP(userId: string, amount: number): Promise<boolean> {
+    if (!isBrowser || !db) return false;
     try {
       const prog = await db.userProgress.where('userId').equals(userId).first();
       if (!prog) {
@@ -284,6 +316,7 @@ export class OfflineManager {
   }
 
   static async startLearningSession(params: { userId: string; subject: string; grade: string; topicId: string; }): Promise<string | null> {
+    if (!isBrowser || !db) return null;
     try {
       const id = crypto.randomUUID();
       await db.learningSessions.add({
@@ -309,6 +342,7 @@ export class OfflineManager {
   }
 
   static async endLearningSession(sessionId: string, results: Partial<LearningSession>): Promise<boolean> {
+    if (!isBrowser || !db) return false;
     try {
       await db.learningSessions.update(sessionId as any, {
         endTime: new Date(),
@@ -331,9 +365,10 @@ export class OfflineManager {
 
   // Teacher utilities
   static async getStudentsBySchool(schoolId: string): Promise<User[]> {
+    if (!isBrowser || !db) return [];
     try {
       const users = await db.users.toArray();
-      return users.filter(u => (u.role === 'student') && (u.schoolNameOrId === schoolId || u.schoolId === schoolId));
+      return users.filter((u) => u.role === 'student' && (u.schoolNameOrId === schoolId || u.schoolId === schoolId));
     } catch (e) {
       console.error('Failed to fetch students by school', e);
       return [];
@@ -341,12 +376,13 @@ export class OfflineManager {
   }
 
   static async getSchoolLeaderboard(schoolId: string): Promise<Array<{ user: User; progress: UserProgress | null }>> {
+    if (!isBrowser || !db) return [];
     try {
       const students = await this.getStudentsBySchool(schoolId);
-      const ids = students.map(s => s.userId);
+      const ids = students.map((s) => s.userId);
       const progresses = ids.length > 0 ? await db.userProgress.where('userId').anyOf(ids).toArray() : [];
-      const progressByUser = new Map(progresses.map(p => [p.userId, p]));
-      const out = students.map(user => ({ user, progress: progressByUser.get(user.userId) ?? null }));
+      const progressByUser = new Map(progresses.map((p) => [p.userId, p]));
+      const out = students.map((user) => ({ user, progress: progressByUser.get(user.userId) ?? null }));
       out.sort((a, b) => (b.progress?.totalXP ?? 0) - (a.progress?.totalXP ?? 0));
       return out;
     } catch (e) {
@@ -356,12 +392,12 @@ export class OfflineManager {
   }
 
   static async publishDailyChallenge(dc: Omit<DailyChallenge, 'id' | 'unlockedAt'> & { id?: string }): Promise<string | null> {
+    if (!isBrowser || !db) return null;
     try {
       const id = dc.id ?? crypto.randomUUID();
       const item: DailyChallenge = {
         ...(dc as any),
         id,
-        // Keep as provided fields; DailyChallenge type has unlockedAt? It defines date field not unlockedAt.
       };
       await db.dailyChallenges.add(item as any);
       await this.addToSyncQueue('create', 'dailyChallenge', id, item);
@@ -380,13 +416,14 @@ export class OfflineManager {
 
   // Progress management
   static async saveProgress(userId: string, progressData: Partial<UserProgress>) {
+    if (!isBrowser || !db) return false;
     try {
       // Save locally
       await db.userProgress.put({ ...progressData, userId } as UserProgress);
-      
+
       // Add to sync queue
       await this.addToSyncQueue('update', 'userProgress', userId, progressData);
-      
+
       return true;
     } catch (error) {
       console.error('Failed to save progress:', error);
@@ -395,8 +432,9 @@ export class OfflineManager {
   }
 
   static async getProgress(userId: string): Promise<UserProgress | null> {
+    if (!isBrowser || !db) return null;
     try {
-      return await db.userProgress.where('userId').equals(userId).first() || null;
+      return (await db.userProgress.where('userId').equals(userId).first()) || null;
     } catch (error) {
       console.error('Failed to get progress:', error);
       return null;
@@ -410,6 +448,7 @@ export class OfflineManager {
     entityId: string,
     data: unknown
   ) {
+    if (!isBrowser || !db) return;
     try {
       await db.syncQueue.add({
         action,
@@ -418,7 +457,7 @@ export class OfflineManager {
         data,
         timestamp: new Date(),
         retries: 0,
-        synced: false
+        synced: false,
       });
     } catch (error) {
       console.error('Failed to add to sync queue:', error);
@@ -426,8 +465,9 @@ export class OfflineManager {
   }
 
   static async getPendingSyncItems(): Promise<SyncQueue[]> {
+    if (!isBrowser || !db) return [];
     try {
-      return await db.syncQueue.filter(item => item.synced === false).toArray();
+      return await db.syncQueue.filter((item) => item.synced === false).toArray();
     } catch (error) {
       console.error('Failed to get pending sync items:', error);
       return [];
@@ -436,12 +476,14 @@ export class OfflineManager {
 
   // Session and analytics helpers
   static async getUserSessions(userId: string) {
-    return await db.learningSessions.where('userId').equals(userId).toArray();
+  if (!isBrowser || !db) return [];
+  return await db.learningSessions.where('userId').equals(userId).toArray();
   }
 
   static async getUserSessionsInRange(userId: string, from: Date, to: Date) {
-    const all = await db.learningSessions.where('userId').equals(userId).toArray();
-    return all.filter(s => new Date(s.startTime) >= from && new Date(s.startTime) <= to);
+  if (!isBrowser || !db) return [];
+  const all = await db.learningSessions.where('userId').equals(userId).toArray();
+  return all.filter((s) => new Date(s.startTime) >= from && new Date(s.startTime) <= to);
   }
 
   static async getStudyTimeMinutes(userId: string, period: 'today' | 'week'): Promise<number> {
@@ -466,7 +508,8 @@ export class OfflineManager {
   }
 
   static async getXPBySubject(userId: string): Promise<Record<Subject | string, number>> {
-    const sessions = await this.getUserSessions(userId);
+  if (!isBrowser || !db) return {};
+  const sessions = await this.getUserSessions(userId);
     const acc: Record<string, number> = {};
     for (const s of sessions) {
       acc[s.subject] = (acc[s.subject] || 0) + (s.xpEarned || 0);
@@ -475,11 +518,12 @@ export class OfflineManager {
   }
 
   static async getEarnedBadges(userId: string): Promise<Badge[]> {
-    const prog = await db.userProgress.where('userId').equals(userId).first();
-    if (!prog || !prog.badgesEarned || prog.badgesEarned.length === 0) return [];
-    const badges = await db.badges.toArray();
-    const set = new Set(prog.badgesEarned);
-    return badges.filter(b => set.has(b.id));
+  if (!isBrowser || !db) return [];
+  const prog = await db.userProgress.where('userId').equals(userId).first();
+  if (!prog || !prog.badgesEarned || prog.badgesEarned.length === 0) return [];
+  const badges = await db.badges.toArray();
+  const set = new Set(prog.badgesEarned);
+  return badges.filter((b) => set.has(b.id));
   }
 
   static async getClassEngagement(schoolId: string, grade: string): Promise<{ avgMinutesWeek: number; activeToday: number; activeThisWeek: number; totalStudents: number; }> {
@@ -512,6 +556,7 @@ export class OfflineManager {
   }
 
   static async markSynced(syncId: number) {
+    if (!isBrowser || !db) return;
     try {
       await db.syncQueue.update(syncId, { synced: true });
     } catch (error) {
@@ -537,20 +582,18 @@ export class OfflineManager {
   }
 
   static async cleanupOldContent(maxAge: number = 30 * 24 * 60 * 60 * 1000) {
+    if (!isBrowser || !db) return 0;
     try {
       const cutoffDate = new Date(Date.now() - maxAge);
-      
-      const oldContent = await db.offlineContent
-        .where('lastAccessedAt')
-        .below(cutoffDate)
-        .toArray();
+
+      const oldContent = await db.offlineContent.where('lastAccessedAt').below(cutoffDate).toArray();
 
       if (oldContent.length > 0) {
-        const ids = oldContent.map(item => item.id!);
+        const ids = oldContent.map((item) => item.id!);
         await db.offlineContent.bulkDelete(ids);
         console.log(`Cleaned up ${oldContent.length} old content items`);
       }
-      
+
       return oldContent.length;
     } catch (error) {
       console.error('Failed to cleanup old content:', error);
@@ -564,29 +607,32 @@ export class OfflineManager {
   }
 
   static async syncWhenOnline(): Promise<boolean> {
-    if (!this.isOnline()) {
-      return false;
-    }
+    if (!this.isOnline()) return false;
+    if (!isBrowser || !db) return false;
 
     try {
       const pendingItems = await this.getPendingSyncItems();
-      
+
       for (const item of pendingItems) {
         try {
           // Here you would make API calls to sync data
           // For now, we'll just simulate success
-          await new Promise(resolve => setTimeout(resolve, 100));
-          
+          await new Promise((resolve) => setTimeout(resolve, 100));
+
           await this.markSynced(item.id!);
         } catch (syncError) {
           // Increment retry count
-          await db.syncQueue.update(item.id!, { 
-            retries: item.retries + 1 
-          });
+          try {
+            await db.syncQueue.update(item.id!, {
+              retries: item.retries + 1,
+            });
+          } catch (uErr) {
+            console.error('Failed to update retry count', uErr);
+          }
           console.error(`Failed to sync item ${item.id}:`, syncError);
         }
       }
-      
+
       return true;
     } catch (error) {
       console.error('Failed to sync data:', error);
@@ -596,6 +642,8 @@ export class OfflineManager {
 }
 
 // Initialize database when imported
-db.open().catch(error => {
-  console.error('Failed to open database:', error);
-});
+if (db) {
+  db.open().catch((error) => {
+    console.error('Failed to open database:', error);
+  });
+}
