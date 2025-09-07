@@ -24,7 +24,7 @@ export function getCurrentUser(): SessionUser | null {
   if (!raw) return null;
   try {
     return JSON.parse(raw) as SessionUser;
-  } catch (_) {
+  } catch {
     return null;
   }
 }

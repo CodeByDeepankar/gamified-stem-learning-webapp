@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@clerk/nextjs": "^5.7.5",
     "@ducanh2912/next-pwa": "^10.2.9",
     "@headlessui/react": "^2.2.7",
     "dexie": "^4.2.0",

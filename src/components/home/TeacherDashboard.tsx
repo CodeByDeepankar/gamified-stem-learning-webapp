@@ -6,48 +6,88 @@ import { useSession } from "@/hooks/useSession";
 import { useOffline } from "@/hooks/useOffline";
 import { grade6MathTopics } from "@/data/content/grade6-mathematics";
 import type { LearningSession } from "@/lib/types/gamification";
+import type { SessionUser } from "@/lib/session/session";
 
 export default function TeacherDashboard() {
-  const { user } = useSession();
+  const { user, setUser } = useSession();
   const [students, setStudents] = useState<User[]>([]);
   const [leaderboard, setLeaderboard] = useState<Array<{ user: User; totalXP: number; level: number; streak: number }>>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [selectedStudent, setSelectedStudent] = useState<string | null>(null);
   const [studentSessions, setStudentSessions] = useState<LearningSession[]>([]);
   const [sessionsByUser, setSessionsByUser] = useState<Record<string, LearningSession[]>>({});
   const [engagement, setEngagement] = useState<{ avgMinutesWeek: number; activeToday: number; activeThisWeek: number; totalStudents: number } | null>(null);
   const offline = useOffline();
 
+  // If schoolId/grade is missing, show a simple setup form instead of an error
+  const [schoolIdInput, setSchoolIdInput] = useState<string>(user?.schoolId ?? "");
+  const [gradeInput, setGradeInput] = useState<string>(user?.grade ?? "");
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [setupError, setSetupError] = useState<string | null>(null);
+
+  async function saveProfile() {
+    if (!schoolIdInput || !gradeInput) {
+      setSetupError("Please provide both School ID and Grade.");
+      return;
+    }
+    setSetupError(null);
+    setSavingProfile(true);
+    try {
+      if (!user) return;
+      await OfflineManager.registerTeacher({
+        schoolId: schoolIdInput,
+        grade: gradeInput,
+        userId: user.userId,
+        name: user.name,
+        preferredLanguage: user.preferredLanguage ?? 'en',
+      });
+      const patch: SessionUser = {
+        userId: user.userId,
+        role: 'teacher',
+        name: user.name,
+        grade: gradeInput,
+        schoolId: schoolIdInput,
+        schoolNameOrId: schoolIdInput,
+        preferredLanguage: user.preferredLanguage ?? 'en',
+      };
+      setUser(patch);
+    } finally {
+      setSavingProfile(false);
+    }
+  }
+
   useEffect(() => {
     (async () => {
-      if (!user?.schoolId) {
-        setError("Missing school ID on teacher profile.");
+      if (!user?.schoolId || !user?.grade) {
+        // Wait until teacher completes profile
         setLoading(false);
         return;
       }
       try {
         const list = await OfflineManager.getStudentsBySchool(user.schoolId);
-        setStudents(list);
+        const sameClass = list.filter(s => s.grade === user.grade);
+        setStudents(sameClass);
         const lbRaw = await OfflineManager.getSchoolLeaderboard(user.schoolId);
         setLeaderboard(
-          lbRaw.map(r => ({
-            user: r.user,
-            totalXP: r.progress?.totalXP ?? 0,
-            level: r.progress?.level ?? 1,
-            streak: r.progress?.currentStreak ?? 0,
-          }))
+          lbRaw
+            .filter(r => r.user.grade === user.grade)
+            .map(r => ({
+              user: r.user,
+              totalXP: r.progress?.totalXP ?? 0,
+              level: r.progress?.level ?? 1,
+              streak: r.progress?.currentStreak ?? 0,
+            }))
         );
         const e = await OfflineManager.getClassEngagement(user.schoolId, user.grade);
         setEngagement(e);
         const map: Record<string, LearningSession[]> = {};
-        for (const st of list) {
+        for (const st of sameClass) {
           map[st.userId] = await OfflineManager.getUserSessions(st.userId) as LearningSession[];
         }
         setSessionsByUser(map);
-        if (list[0]) {
-          setSelectedStudent(list[0].userId);
-          setStudentSessions(map[list[0].userId] || []);
+        if (sameClass[0]) {
+          setSelectedStudent(sameClass[0].userId);
+          setStudentSessions(map[sameClass[0].userId] || []);
         }
       } finally {
         setLoading(false);
@@ -55,45 +95,46 @@ export default function TeacherDashboard() {
     })();
   }, [user?.schoolId, user?.grade]);
 
+  const topics = useMemo(() => grade6MathTopics.slice(0, 6), []);
+
+  if (!user?.schoolId || !user?.grade) {
+    return (
+      <section className="mb-16 bg-white rounded-2xl border shadow-sm p-6">
+        <h3 className="text-xl font-bold text-gray-900 mb-2">Complete Teacher Profile</h3>
+        <p className="text-sm text-gray-600 mb-4">Enter your School ID and Class/Grade to view your class list.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <label className="block">
+            <span className="block text-sm text-gray-600 mb-1">School ID</span>
+            <input className="w-full border rounded px-3 py-2" value={schoolIdInput} onChange={(e) => setSchoolIdInput(e.target.value)} />
+          </label>
+          <label className="block">
+            <span className="block text-sm text-gray-600 mb-1">Grade</span>
+            <select className="w-full border rounded px-3 py-2" value={gradeInput} onChange={(e) => setGradeInput(e.target.value)}>
+              <option value="">Select</option>
+              <option value="6">6</option>
+              <option value="7">7</option>
+              <option value="8">8</option>
+              <option value="9">9</option>
+              <option value="10">10</option>
+              <option value="11">11</option>
+              <option value="12">12</option>
+            </select>
+          </label>
+          <div className="flex items-end">
+            <button onClick={saveProfile} disabled={savingProfile} className="px-4 py-2 rounded bg-blue-600 text-white disabled:opacity-50 w-full">{savingProfile ? 'Saving...' : 'Save'}</button>
+          </div>
+        </div>
+        {setupError && <div className="text-sm text-rose-600 mt-3">{setupError}</div>}
+      </section>
+    );
+  }
+
   async function onSelectStudent(id: string) {
     setSelectedStudent(id);
     setStudentSessions(await OfflineManager.getUserSessions(id));
   }
 
-  async function publishChallenge() {
-    if (!user) return;
-    await OfflineManager.publishDailyChallenge({
-      date: new Date(),
-      subject: user.subject ?? "",
-      grade: user.grade,
-      title: "Daily Practice",
-      titleOdia: "ଦୈନିକ ଅଭ୍ୟାସ",
-      description: "Complete a short practice set today",
-      descriptionOdia: "ଆଜି ଏକ ଛୋଟ ଅଭ୍ୟାସ ସମ୍ପୁର୍ଣ୍ଣ କରନ୍ତୁ",
-      difficulty: "easy",
-      xpReward: 20,
-      timeLimit: 15,
-      questions: [],
-      id: undefined,
-    } as unknown as Parameters<typeof OfflineManager.publishDailyChallenge>[0]);
-    // You may show a toast/notification; keep simple
-  }
-
-  async function publishQuiz() {
-    if (!user?.schoolId) return;
-    await OfflineManager.publishQuiz({
-      schoolId: user.schoolId,
-      grade: user.grade,
-      subject: user.subject ?? "",
-      title: "Weekly Quiz",
-      description: "Auto-generated quiz for the week",
-    });
-  }
-
-  const topics = useMemo(() => grade6MathTopics.slice(0, 6), []);
-
   if (loading) return <div className="bg-white rounded-2xl border p-6">Loading teacher dashboard...</div>;
-  if (error) return <div className="bg-white rounded-2xl border p-6 text-red-600">{error}</div>;
 
   return (
     <section className="mb-16 bg-white rounded-2xl border shadow-sm p-6">
@@ -106,13 +147,9 @@ export default function TeacherDashboard() {
             {offline.status.pendingSyncCount > 0 ? ` • ${offline.status.pendingSyncCount} pending` : ''}
           </span>
         </div>
-        <div className="flex gap-2">
-          <button onClick={publishQuiz} className="px-3 py-2 rounded bg-blue-600 text-white">Publish Quiz</button>
-          <button onClick={publishChallenge} className="px-3 py-2 rounded bg-emerald-600 text-white">Publish Daily Challenge</button>
-        </div>
       </div>
 
-      <div className="text-gray-600 mb-4">School ID: {user?.schoolId} • Grade {user?.grade} • {user?.subject}</div>
+      <div className="text-gray-600 mb-4">School ID: {user?.schoolId} • Grade {user?.grade}</div>
 
       {/* Engagement Tracker */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -174,15 +211,23 @@ export default function TeacherDashboard() {
             {students.length === 0 ? (
               <div className="text-gray-500 text-sm">No students registered with this School ID yet.</div>
             ) : (
-              students.map(s => (
-                <div key={s.userId} className="py-2 text-sm flex justify-between">
-                  <div>
-                    <div className="font-medium">{s.name || s.userId}</div>
-                    <div className="text-gray-500">Grade {s.grade}</div>
-                  </div>
-                  <div className="text-gray-500">{s.studentId}</div>
-                </div>
-              ))
+              students.map(s => {
+                const sessions = sessionsByUser[s.userId] || [];
+                const today = new Date(); today.setHours(0,0,0,0);
+                const activeToday = sessions.some(sess => new Date(sess.startTime) >= today);
+                return (
+                  <a key={s.userId} href={`/profile?userId=${encodeURIComponent(s.userId)}`} className="py-2 text-sm flex justify-between items-center hover:bg-gray-50 px-2 rounded">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2.5 h-2.5 rounded-full ${activeToday ? 'bg-emerald-500' : 'bg-gray-300'}`} title={activeToday ? 'Active today' : 'Inactive'} />
+                      <div>
+                        <div className="font-medium">{s.name || s.userId}</div>
+                        <div className="text-gray-500">Grade {s.grade}</div>
+                      </div>
+                    </div>
+                    <div className="text-gray-500">{s.studentId}</div>
+                  </a>
+                );
+              })
             )}
           </div>
           <div className="mt-3 flex gap-2">

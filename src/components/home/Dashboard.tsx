@@ -73,9 +73,9 @@ export default function Dashboard() {
 function MenuCard({ href, title, icon, color }: { href: string; title: string; icon: string; color: string }) {
   return (
     <Link href={href} className="group block">
-      <div className={`rounded-xl p-4 bg-gradient-to-br ${color} text-white shadow-lg hover:shadow-xl transition transform group-hover:-translate-y-0.5`}>
+      <div className={`rounded-xl p-4 bg-gradient-to-br ${color} text-gray-50 dark:text-white shadow-lg hover:shadow-xl transition transform group-hover:-translate-y-0.5`}>
         <div className="text-2xl">{icon}</div>
-        <div className="mt-2 text-sm font-semibold">{title}</div>
+        <div className="mt-2 text-sm font-semibold drop-shadow-sm">{title}</div>
       </div>
     </Link>
   );
